@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>Focus OS — Minimalist Productivity Dashboard</title>
+  <!-- Tailwind CSS v3 + Font Awesome Icons (clean, modern) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Override Tailwind default dark mode strategy: we'll use a class-based dark mode controlled by JS/system preference -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    /* custom subtle glow and transitions, perfect dark-mode polish */
+    body {
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    .timer-ring {
+      transition: stroke-dashoffset 0.1s linear;
+    }
+    /* custom focus ring for accessibility */
+    button:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 2px solid #60a5fa;
+      outline-offset: 2px;
+    }
+    /* Card smooth hover effect */
+    .dashboard-card {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .dashboard-card:hover {
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-200 font-sans antialiased">
+
+  <main class="max-w-4xl mx-auto px-4 py-6 md:py-10 min-h-screen flex flex-col">
+    <!-- Header: Focus OS branding + realtime digital clock -->
+    <div class="flex flex-col md:flex-row justify-between items-center border-b border-gray-800 pb-4 mb-8 gap-3">
+      <div class="flex items-center gap-2">
+        <i class="fas fa-brain text-indigo-400 text-2xl"></i>
+        <h1 class="text-2xl font-light tracking-wide">Focus<span class="font-semibold text-indigo-400">OS</span></h1>
+        <span class="text-xs bg-gray-800 px-2 py-0.5 rounded-full ml-2">v1.0</span>
+      </div>
+      <!-- real-time digital clock (large, modern) -->
+      <div class="flex items-center gap-2 bg-gray-900/70 backdrop-blur-sm px-4 py-2 rounded-full">
+        <i class="far fa-clock text-indigo-300 text-sm"></i>
+        <span id="liveClock" class="font-mono text-xl font-medium tracking-wider">--:--:--</span>
+      </div>
+    </div>
+
+    <!-- 3-COLUMN GRID: modern, responsive, stacks on mobile -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
+      
+      <!-- LEFT COLUMN: Most Important Task (MIT) - persistent via localStorage -->
+      <div class="lg:col-span-1 bg-gray-900/50 rounded-2xl border border-gray-800 p-5 dashboard-card backdrop-blur-sm">
+        <div class="flex items-center gap-2 mb-4 border-b border-gray-800 pb-2">
+          <i class="fas fa-star text-yellow-400 text-sm"></i>
+          <h2 class="text-md font-semibold uppercase tracking-wider text-gray-300">Most Important Task</h2>
+          <span class="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded-full">MIT</span>
+        </div>
+        <div class="relative">
+          <textarea id="mitTaskInput" rows="3" placeholder="Write your single most important task for today ...&#10;&#10;Example: Finish project proposal, Study chapter 4, etc." 
+          class="w-full bg-gray-800/70 border border-gray-700 rounded-xl p-3 text-gray-100 placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition resize-none text-sm"></textarea>
+          <div class="flex justify-between items-center mt-2 text-xs text-gray-500">
+            <span><i class="far fa-save mr-1"></i> auto‑saved</span>
+            <button id="clearMitBtn" class="text-gray-500 hover:text-red-400 transition text-xs flex items-center gap-1"><i class="fas fa-eraser"></i> Clear</button>
+          </div>
+        </div>
+        <p class="text-[11px] text-gray-600 mt-3 italic">✓ Persists after refresh — your single focus.</p>
+      </div>
+
+      <!-- MIDDLE + RIGHT columns merged fluidly: Pomodoro Timer (main focus) -->
+      <div class="lg:col-span-2 bg-gray-900/50 rounded-2xl border border-gray-800 p-5 dashboard-card backdrop-blur-sm">
+        <div class="flex items-center gap-2 mb-3 border-b border-gray-800 pb-2">
+          <i class="fas fa-hourglass-half text-emerald-400"></i>
+          <h2 class="text-md font-semibold uppercase tracking-wider text-gray-300">Pomodoro Timer</h2>
+          <span class="text-[10px] bg-gray-800 px-2 py-0.5 rounded-full">25 min focus</span>
+        </div>
+        
+        <!-- Timer display: circular progress (SVG) + time digits, clean modern look -->
+        <div class="flex flex-col items-center justify-center mt-2">
+          <div class="relative flex justify-center items-center mb-5">
+            <!-- SVG ring (optional progress) -->
+            <svg class="w-44 h-44 md:w-52 md:h-52 transform -rotate-90">
+              <circle cx="50%" cy="50%" r="45%" stroke="currentColor" stroke-width="6" fill="none" class="text-gray-800" />
+              <circle id="timerProgressRing" cx="50%" cy="50%" r="45%" stroke="currentColor" stroke-width="6" fill="none" class="text-indigo-500 transition-all duration-100"
+                stroke-dasharray="0 1000" stroke-linecap="round" />
+            </svg>
+            <div class="absolute flex flex-col items-center">
+              <span id="timerDisplay" class="text-5xl md:text-6xl font-mono font-bold tracking-wider text-white">25:00</span>
+              <span class="text-xs text-gray-400 mt-1">focus session</span>
+            </div>
+          </div>
+          
+          <!-- Timer controls: start, pause, reset (with state awareness) -->
+          <div class="flex gap-4 flex-wrap justify-center mt-2">
+            <button id="timerStartBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full flex items-center gap-2 transition shadow-md">
+              <i class="fas fa-play text-sm"></i> Start
+            </button>
+            <button id="timerPauseBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-6 py-2 rounded-full flex items-center gap-2 transition shadow-md">
+              <i class="fas fa-pause text-sm"></i> Pause
+            </button>
+            <button id="timerResetBtn" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-5 py-2 rounded-full flex items-center gap-2 transition">
+              <i class="fas fa-undo-alt text-sm"></i> Reset
+            </button>
+          </div>
+          <div class="mt-4 text-xs text-gray-500 flex gap-3">
+            <span><i class="far fa-bell mr-1"></i> Notify on completion</span>
+            <span><i class="fas fa-infinity mr-1"></i> 25:00 / 00:00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- bottom small motivational bar / minimalist footer -->
+    <div class="mt-8 pt-4 text-center text-gray-500 text-xs border-t border-gray-800/60 flex justify-between flex-wrap">
+      <span>⚡ one task. one timer. zero distractions.</span>
+      <span id="dateIndicator" class="font-mono"></span>
+    </div>
+  </main>
+
+  <script>
+    (function() {
+      // ------------------------------
+      // 1. REAL-TIME DIGITAL CLOCK
+      // ------------------------------
+      const clockElement = document.getElementById('liveClock');
+      function updateClock() {
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        clockElement.textContent = `${hours}:${minutes}:${seconds}`;
+      }
+      updateClock();
+      setInterval(updateClock, 1000);
+      
+      // optional: show current date in footer
+      const dateElement = document.getElementById('dateIndicator');
+      if(dateElement) {
+        const nowDate = new Date();
+        const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+        dateElement.textContent = nowDate.toLocaleDateString(undefined, options);
+      }
+      
+      // ------------------------------
+      // 2. MOST IMPORTANT TASK: localStorage persistence (textarea)
+      // ------------------------------
+      const mitTextarea = document.getElementById('mitTaskInput');
+      const clearBtn = document.getElementById('clearMitBtn');
+      
+      const MIT_STORAGE_KEY = 'focusos_mit_task';
+      
+      // Load stored task on page load
+      function loadMostImportantTask() {
+        const savedTask = localStorage.getItem(MIT_STORAGE_KEY);
+        if (savedTask !== null) {
+          mitTextarea.value = savedTask;
+        } else {
+          // optional placeholder example: empty
+          mitTextarea.value = '';
+        }
+      }
+      
+      // Save to localStorage on every input change
+      function saveMIT(value) {
+        localStorage.setItem(MIT_STORAGE_KEY, value);
+      }
+      
+      mitTextarea.addEventListener('input', (e) => {
+        saveMIT(e.target.value);
+      });
+      
+      clearBtn.addEventListener('click', () => {
+        mitTextarea.value = '';
+        localStorage.removeItem(MIT_STORAGE_KEY);
+        // subtle haptic - optional, just clear
+        mitTextarea.focus();
+      });
+      
+      loadMostImportantTask();
+      
+      // ------------------------------
+      // 3. POMODORO TIMER (25 minutes) with start/pause/reset and progress ring
+      // ------------------------------
+      const TIMER_DURATION_SECONDS = 25 * 60; // 1500 seconds
+      let currentSeconds = TIMER_DURATION_SECONDS; // remaining seconds
+      let timerInterval = null;
+      let isRunning = false;
+      
+      // DOM elements
+      const timerDisplaySpan = document.getElementById('timerDisplay');
+      const startBtn = document.getElementById('timerStartBtn');
+      const pauseBtn = document.getElementById('timerPauseBtn');
+      const resetBtn = document.getElementById('timerResetBtn');
+      const progressRing = document.getElementById('timerProgressRing');
+      
+      // Helper: format mm:ss
+      function formatTime(secondsTotal) {
+        if (secondsTotal < 0) secondsTotal = 0;
+        const mins = Math.floor(secondsTotal / 60);
+        const secs = secondsTotal % 60;
+        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      }
+      
+      // Update UI: text + progress circle (stroke-dasharray based on remaining fraction)
+      function updateTimerUI() {
+        if (timerDisplaySpan) {
+          timerDisplaySpan.textContent = formatTime(currentSeconds);
+        }
+        // update radial progress: circumference based on viewBox scaling
+        // We'll compute the progress ratio (0 to 1) and set stroke-dasharray.
+        // Circle radius is 45% of svg size, but easier: stroke-dasharray total perimeter = 2 * PI * radius.
+        // Since we use dynamic scaling on SVG, we define the circle's radius in path length.
+        // Approach: get the circle element from SVG (the ring path). we'll use a consistent math: 
+        // The circle has r="45%", but percentage is dynamic relative to viewBox. Actually, we need to compute by getting the circle's circumference.
+        // For simplicity and robustness: use getBBox / getComputed length? safer: directly measure using javascript once after render.
+        let circle = progressRing;
+        if (!circle) return;
+        // get radius value from the circle element's r attribute (in user units). The SVG uses percentage? no, r="45%", that's relative to SVG size. We need accurate circumference.
+        // Better: we can set a fixed radius identifier? Simpler: we store the length after initial render.
+        if (!circle._circumference) {
+          // Trick: force radius read: but r="45%" gives 45% of viewport, for simplicity we can compute using getBBox.
+          try {
+            let radius = circle.r.baseVal.value; // if returns NaN with percentage? alternative: fetch from computed style or parent? Let's use a deterministic hack.
+            if (isNaN(radius) || radius === 0) {
+              const svgElem = circle.parentElement;
+              const width = svgElem.viewBox.baseVal.width || 200;
+              const height = svgElem.viewBox.baseVal.height || 200;
+              // default view not set but width/height from SVG, bounding. Fallback: 0.45 * 100 = 45.
+              radius = 45;
+            }
+            circle._circumference = 2 * Math.PI * radius;
+          } catch(e) {
+            // fallback static circumference for radius ~45 (as percentage of 200 viewBox)
+            circle._circumference = 2 * Math.PI * 45;
+          }
+        }
+        const totalCircumference = circle._circumference || (2 * Math.PI * 45);
+        const fraction = currentSeconds / TIMER_DURATION_SECONDS;
+        const dash = totalCircumference * fraction;
+        const remainingDash = totalCircumference * (1 - fraction);
+        // stroke-dasharray = "progress , remaining"
+        circle.style.strokeDasharray = `${dash} ${totalCircumference}`;
+        if (currentSeconds === 0) {
+          circle.style.strokeDasharray = `0 ${totalCircumference}`;
+        }
+      }
+      
+      // when timer completes: play sound / alert (optional clean browser notification & beep)
+      function timerComplete() {
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+        isRunning = false;
+        // browser notification (if permission granted)
+        if (Notification.permission === 'granted') {
+          new Notification('Focus OS — Pomodoro Complete!', {
+            body: 'Great work! 25 minutes completed. Take a short break.',
+            icon: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" fill="%234f46e5" viewBox="0 0 24 24"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15h-2v-2h2v2zm0-4h-2V7h2v6z"/%3E%3C/svg%3E'
+          });
+        } else if (Notification.permission !== 'denied') {
+          Notification.requestPermission().then(perm => {
+            if (perm === 'granted') {
+              new Notification('Pomodoro Completed', { body: '25 minutes done! Reset timer or start again.' });
+            }
+          });
+        }
+        // also generate a subtle beep via Web Audio (optional but user-friendly)
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const oscillator = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          oscillator.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          oscillator.frequency.value = 880;
+          gainNode.gain.value = 0.2;
+          oscillator.start();
+          gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 1);
+          oscillator.stop(audioCtx.currentTime + 0.8);
+          audioCtx.resume();
+        } catch(e) { console.log("audio not supported"); }
+        // optional alert style but not intrusive
+        timerDisplaySpan.textContent = "00:00";
+        currentSeconds = 0;
+        updateTimerUI();
+      }
+      
+      // Timer tick function
+      function timerTick() {
+        if (currentSeconds <= 1) {
+          // timer reaches zero
+          if (currentSeconds === 0) {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+            isRunning = false;
+            return;
+          }
+          currentSeconds = 0;
+          updateTimerUI();
+          if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+          }
+          isRunning = false;
+          timerComplete();
+        } else {
+          currentSeconds--;
+          updateTimerUI();
+        }
+      }
+      
+      function startTimer() {
+        if (isRunning) return;
+        // if timer already at 0, reset first to 25 min? but we can block start if zero and reset needed
+        if (currentSeconds === 0) {
+          // optionally reset to full duration for better UX
+          resetTimer();
+        }
+        if (timerInterval) clearInterval(timerInterval);
+        isRunning = true;
+        timerInterval = setInterval(() => {
+          timerTick();
+        }, 1000);
+      }
+      
+      function pauseTimer() {
+        if (!isRunning) return;
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+        isRunning = false;
+      }
+      
+      function resetTimer() {
+        // stop timer if running
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+        isRunning = false;
+        currentSeconds = TIMER_DURATION_SECONDS;
+        updateTimerUI();
+      }
+      
+      // Attach event listeners to buttons
+      startBtn.addEventListener('click', startTimer);
+      pauseBtn.addEventListener('click', pauseTimer);
+      resetBtn.addEventListener('click', resetTimer);
+      
+      // Initialize UI for timer
+      currentSeconds = TIMER_DURATION_SECONDS;
+      updateTimerUI();
+      
+      // For the progress ring, ensure initial calculation and update resize stability
+      function recalcRingCircumference() {
+        if (!progressRing) return;
+        try {
+          // Note: r="45%" relative to SVG viewBox, we fallback to computed result: getBBox gives radius in px? but ring value.
+          const svgElem = progressRing.closest('svg');
+          if (svgElem) {
+            const circleElement = progressRing;
+            const radiusPercent = 45; // as used in r attribute
+            let viewBoxWidth = 200, viewBoxHeight = 200;
+            if (svgElem.viewBox && svgElem.viewBox.baseVal) {
+              viewBoxWidth = svgElem.viewBox.baseVal.width || 200;
+              viewBoxHeight = svgElem.viewBox.baseVal.height || 200;
+            } else {
+              const widthAttr = svgElem.getAttribute('viewBox');
+              if (widthAttr) {
+                const parts = widthAttr.split(' ');
+                if (parts.length >= 2) viewBoxWidth = parseFloat(parts[2]);
+              }
+            }
+            const radiusInUnits = (radiusPercent / 100) * Math.min(viewBoxWidth, viewBoxHeight);
+            progressRing._circumference = 2 * Math.PI * radiusInUnits;
+          } else {
+            progressRing._circumference = 2 * Math.PI * 45;
+          }
+        } catch(e) {
+          progressRing._circumference = 2 * Math.PI * 45;
+        }
+        updateTimerUI();
+      }
+      recalcRingCircumference();
+      window.addEventListener('resize', () => { recalcRingCircumference(); });
+      
+      // Enable notification permission on first user gesture (start button or click)
+      function requestNotificationPerm() {
+        if (Notification && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      }
+      startBtn.addEventListener('click', requestNotificationPerm, { once: true });
+      pauseBtn.addEventListener('click', requestNotificationPerm);
+      resetBtn.addEventListener('click', requestNotificationPerm);
+      
+      // additional edge: avoid timer negative due to setInterval drift; ensure robust
+      setInterval(() => {
+        if (isRunning && currentSeconds > 0) {
+          // already ticking via timerTick, but guard double update: no need extra. 
+        }
+      }, 500);
+      
+      // Add dark mode guarantee (already dark via bg-gray-950)
+      // For simplicity, ensures text contrast.
+      
+      // extra micro feature: browser storage for timer currentSeconds? optional but not required
+      // But give ability to keep timer if page refresh? Not needed by spec. Save focus mode.
+      
+      // Persistence done for MIT; clock + timer all functional.
+      // Ensures that when timer completes, no negative remainder.
+    })();
+  </script>
+</body>
+</html>
